@@ -2,11 +2,11 @@
 API das funcionalidades do sistema
 """
 
-import copy
 import heapq
 import itertools
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Iterable
 
 import numpy as np
 from pgmpy.factors.discrete import TabularCPD
@@ -182,8 +182,34 @@ class SeverityBayesianNetwork:
     def risk(self, report: Report):
         return self.severity(report) * report.wait_time
 
-    def risk_acc(self, reports: list[Report]):
-        return sum([self.risk(r) for r in reports])
+    def risk_acc(self, reports: Iterable[Report]):
+        s = 0
+        for r in reports:
+            s += self.risk(r)
+        return s
+
+    def _severity_tup(self, report_tup: tuple):
+        return self.infer.query(
+            [Severity.__name__],
+            {
+                Fever.__name__: report_tup[0].name,
+                Saturation.__name__: report_tup[1].name,
+                Pressure.__name__: report_tup[2].name,
+                Frequency.__name__: report_tup[3].name,
+                Pain.__name__: report_tup[4].name,
+                Age.__name__: report_tup[5].name,
+                Illness.__name__: report_tup[6].name,
+            },
+        ).get_value(Severity=Severity.High.name)
+
+    def _risk_tup(self, report_tup: tuple):
+        return self._severity_tup(report_tup) * report_tup[-1]
+
+    def _risk_acc_tup(self, reports: tuple[tuple, ...]):
+        s = 0
+        for r in reports:
+            s += self._risk_tup(r)
+        return s
 
 
 def _enum_names(e):
@@ -242,7 +268,7 @@ def _severity_prob(fever, saturation, pressure, frequency, pain, age, illness):
 
 class _SearchNode:
     def __init__(self, state, parent=None, action=None, path_cost=0):
-        self.state: list[Report] = state
+        self.state: tuple[tuple, ...] = state
         self.parent = parent
         self.action = action
         self.path_cost = path_cost
@@ -262,35 +288,53 @@ class _SearchNode:
 def expand(node: _SearchNode, consultation_time, sn: SeverityBayesianNetwork):
     s = node.state
     for i in range(len(s)):
-        s1 = copy.deepcopy(s)
-        s1.pop(i)
-        for r in s1:
-            r.wait_time += consultation_time
+        s1 = tuple(
+            (*r[:7], r[7] + consultation_time) for j, r in enumerate(s) if j != i
+        )
 
-        cost = node.path_cost + sn.risk_acc(s1)
+        cost = node.path_cost + sn._risk_acc_tup(s1)
         yield _SearchNode(state=s1, parent=node, action=i, path_cost=cost)
 
 
 def order_a_star(q: list[Report], consultation_time, sn: SeverityBayesianNetwork):
-    init_q = copy.deepcopy(q)
+    init_q = tuple(
+        (
+            r.fever,
+            r.saturation,
+            r.pressure,
+            r.frequency,
+            r.pain,
+            r.age,
+            r.illness,
+            r.wait_time,
+        )
+        for r in sorted(q, key=lambda r: sn.risk(r), reverse=True)
+    )
     node = _SearchNode(init_q)
 
     def h_func(node: _SearchNode):
-        return sn.risk_acc(node.state)
+        return sn._risk_acc_tup(node.state)
 
     frontier = []
     heapq.heappush(frontier, (node.path_cost + h_func(node), node))
-    reached = {tuple(init_q): node}
+    reached = {init_q: node}
 
     while frontier:
         priority, node = heapq.heappop(frontier)
+        if priority > node.path_cost + h_func(node):
+            continue
         if len(node.state) == 0:
-            return [init_q[i] for i in node.solution()]
+            return [
+                Report(
+                    *init_q[i][:7],
+                    wait_time=init_q[i][-1] + i * consultation_time,
+                )
+                for i in node.solution()
+            ]
         for child in expand(node, consultation_time, sn):
             s = child.state
-            sh = tuple(s)
-            if sh not in reached:
-                reached[sh] = child
+            if s not in reached:
+                reached[s] = child
                 heapq.heappush(frontier, (child.path_cost + h_func(child), child))
 
     return []

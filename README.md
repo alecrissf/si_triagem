@@ -18,7 +18,7 @@ python3 src/test.py
 Para utilizar a API:
 
 ```python
-t = TestTriageManager(consultation_time=20)
+t = TriageManager(consultation_time=20)
 order = t.order([ Report(...), ... ])
 risk = t.sn.risk_acc(order)
 ```
