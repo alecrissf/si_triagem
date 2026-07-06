@@ -2,6 +2,7 @@
 API das funcionalidades do sistema
 """
 
+import copy
 import heapq
 import itertools
 from dataclasses import dataclass
@@ -102,7 +103,7 @@ class SeverityBayesianNetwork:
             )
         )
 
-        PROB = {
+        self.PROB = {
             Fever.__name__: [0.8, 0.2],
             Saturation.__name__: [0.10, 0.35, 0.55],
             Pressure.__name__: [0.85, 0.15],
@@ -120,7 +121,7 @@ class SeverityBayesianNetwork:
                     values=[[p] for p in v],
                     state_names={k: self.STATES[k]},
                 )
-                for k, v in PROB.items()
+                for k, v in self.PROB.items()
             ]
         )
 
@@ -188,29 +189,6 @@ class SeverityBayesianNetwork:
             s += self.risk(r)
         return s
 
-    def _severity_tup(self, report_tup: tuple):
-        return self.infer.query(
-            [Severity.__name__],
-            {
-                Fever.__name__: report_tup[0].name,
-                Saturation.__name__: report_tup[1].name,
-                Pressure.__name__: report_tup[2].name,
-                Frequency.__name__: report_tup[3].name,
-                Pain.__name__: report_tup[4].name,
-                Age.__name__: report_tup[5].name,
-                Illness.__name__: report_tup[6].name,
-            },
-        ).get_value(Severity=Severity.High.name)
-
-    def _risk_tup(self, report_tup: tuple):
-        return self._severity_tup(report_tup) * report_tup[-1]
-
-    def _risk_acc_tup(self, reports: tuple[tuple, ...]):
-        s = 0
-        for r in reports:
-            s += self._risk_tup(r)
-        return s
-
 
 def _enum_names(e):
     return [m.name for m in e]
@@ -268,10 +246,11 @@ def _severity_prob(fever, saturation, pressure, frequency, pain, age, illness):
 
 class _SearchNode:
     def __init__(self, state, parent=None, action=None, path_cost=0):
-        self.state: tuple[tuple, ...] = state
+        self.state: tuple[int, ...] = state
         self.parent = parent
         self.action = action
         self.path_cost = path_cost
+        self.level = 0 if not parent else parent.level + 1
 
     def __lt__(self, other):
         return self.path_cost < other.path_cost
@@ -284,54 +263,45 @@ class _SearchNode:
             curr = curr.parent
         return actions[::-1]
 
-
-def expand(node: _SearchNode, consultation_time, sn: SeverityBayesianNetwork):
-    s = node.state
-    for i in range(len(s)):
-        s1 = tuple(
-            (*r[:7], r[7] + consultation_time) for j, r in enumerate(s) if j != i
-        )
-
-        cost = node.path_cost + sn._risk_acc_tup(s1)
-        yield _SearchNode(state=s1, parent=node, action=i, path_cost=cost)
+    def is_goal(self):
+        return len(self.state) == 0
 
 
 def order_a_star(q: list[Report], consultation_time, sn: SeverityBayesianNetwork):
-    init_q = tuple(
-        (
-            r.fever,
-            r.saturation,
-            r.pressure,
-            r.frequency,
-            r.pain,
-            r.age,
-            r.illness,
-            r.wait_time,
-        )
-        for r in sorted(q, key=lambda r: sn.risk(r), reverse=True)
-    )
-    node = _SearchNode(init_q)
+    q = copy.deepcopy(q)
+
+    def expand(node: _SearchNode):
+        s = node.state
+        for i in s:
+            s1 = tuple(j for j in s if j != i)
+            cost = node.path_cost
+            wait_time = consultation_time * node.level
+            for k in s1:
+                cost += sn.severity(q[k]) * (q[k].wait_time + wait_time)
+            yield _SearchNode(state=s1, parent=node, action=i, path_cost=cost)
 
     def h_func(node: _SearchNode):
-        return sn._risk_acc_tup(node.state)
+        wait_time = consultation_time * node.level
+        cost = 0
+        for k in node.state:
+            cost += sn.severity(q[k]) * (q[k].wait_time + wait_time)
+        return cost
 
+    node = _SearchNode(tuple(range(len(q))))
     frontier = []
     heapq.heappush(frontier, (node.path_cost + h_func(node), node))
-    reached = {init_q: node}
+    reached = {node.state: node}
 
     while frontier:
         priority, node = heapq.heappop(frontier)
-        if priority > node.path_cost + h_func(node):
-            continue
-        if len(node.state) == 0:
-            return [
-                Report(
-                    *init_q[i][:7],
-                    wait_time=init_q[i][-1] + i * consultation_time,
-                )
-                for i in node.solution()
-            ]
-        for child in expand(node, consultation_time, sn):
+        # if priority > node.path_cost + h_func(node):
+        #     continue
+        if node.is_goal():
+            res = [q[i] for i in node.solution()]
+            for i, r in enumerate(res):
+                r.wait_time += i * consultation_time
+            return res
+        for child in expand(node):
             s = child.state
             if s not in reached:
                 reached[s] = child
