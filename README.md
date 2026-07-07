@@ -7,6 +7,11 @@
 - João Pedro Gondim Marreira - 539230
 - Jonathan Davi Sampaio Faria - 496357
 
+## Dependências:
+
+- mgmpy
+- typer
+
 ## Instruções:
 
 Para executar os experimentos:
