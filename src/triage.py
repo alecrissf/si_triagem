@@ -181,7 +181,7 @@ class SeverityBayesianNetwork:
         )
 
     def severity(self, report: Report):
-        return self.severity(report).get_value(Severity=Severity.High.name)
+        return self.severity_infer(report).get_value(Severity=Severity.High.name)
 
     def risk(self, report: Report):
         return self.severity(report) * report.wait_time
