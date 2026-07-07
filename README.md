@@ -29,6 +29,7 @@ python3 src/infer.py --help
 
 ```bash
 # Para executar uma inferência de exemplo
+# Ordem das informações: febre saturação pressão frequência dor idade doença e tempo_espera
 python3 src/infer.py normal reduced low normal low adult no 0
 ```
 
