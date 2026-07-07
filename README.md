@@ -2,6 +2,10 @@
 
 ## Sistema Inteligente de Triagem em Pronto-Socorro
 
+Implementação de um sistema de triagem que utiliza a probabilidade de
+alta gravidade dos pacientes para definir a ordem de chamada da fila
+de espera.
+
 ### Integrantes:
 
 - João Pedro Gondim Marreira - 539230
