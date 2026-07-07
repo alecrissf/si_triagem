@@ -15,6 +15,18 @@ Para executar os experimentos:
 python3 src/test.py
 ```
 
+Para executar uma inferência, utilize o programa implementado em `src/infer.py`:
+
+```bash
+# Para ver os argumentos aceitos
+python3 src/infer.py --help
+```
+
+```bash
+# Para executar uma inferência de exemplo
+python3 src/infer.py normal reduced low normal low adult no 0
+```
+
 Para utilizar a API:
 
 ```python

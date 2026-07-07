@@ -6,7 +6,7 @@ import copy
 import heapq
 import itertools
 from dataclasses import dataclass
-from enum import Enum, auto
+from enum import StrEnum, auto
 from typing import Iterable
 
 import numpy as np
@@ -15,44 +15,44 @@ from pgmpy.inference import VariableElimination
 from pgmpy.models import DiscreteBayesianNetwork
 
 
-class Fever(Enum):
+class Fever(StrEnum):
     Normal = auto()
     High = auto()
 
 
-class Saturation(Enum):
+class Saturation(StrEnum):
     Normal = auto()
     Reduced = auto()
     Critical = auto()
 
 
-class Pressure(Enum):
+class Pressure(StrEnum):
     Normal = auto()
     Low = auto()
 
 
-class Frequency(Enum):
+class Frequency(StrEnum):
     Normal = auto()
     High = auto()
 
 
-class Pain(Enum):
+class Pain(StrEnum):
     Low = auto()
     Medium = auto()
     High = auto()
 
 
-class Age(Enum):
+class Age(StrEnum):
     Adult = auto()
     Elderly = auto()
 
 
-class Illness(Enum):
+class Illness(StrEnum):
     No = auto()
     Yes = auto()
 
 
-class Severity(Enum):
+class Severity(StrEnum):
     Low = auto()
     Medium = auto()
     High = auto()
@@ -166,7 +166,7 @@ class SeverityBayesianNetwork:
         self.nw.check_model()
         self.infer = VariableElimination(self.nw)
 
-    def severity(self, report: Report):
+    def severity_infer(self, report: Report):
         return self.infer.query(
             [Severity.__name__],
             {
@@ -178,7 +178,10 @@ class SeverityBayesianNetwork:
                 Age.__name__: report.age.name,
                 Illness.__name__: report.illness.name,
             },  # ty:ignore[invalid-argument-type]
-        ).get_value(Severity=Severity.High.name)
+        )
+
+    def severity(self, report: Report):
+        return self.severity(report).get_value(Severity=Severity.High.name)
 
     def risk(self, report: Report):
         return self.severity(report) * report.wait_time
